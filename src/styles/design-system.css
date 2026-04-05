@@ -1,0 +1,85 @@
+/* Design System - WhatsApp Business Power Inbox (Compact POS-style) */
+
+:root {
+  /* Core Colors - AWS/Slate Dark */
+  --bg-primary: #0d1117;
+  --bg-secondary: #15191d;
+  --bg-tertiary: #24292e;
+  
+  --accent-primary: #ff9900; /* AWS Orange */
+  --accent-secondary: #ec7211; /* Deep Orange */
+  --accent-glow: rgba(255, 153, 0, 0.2);
+  
+  --text-primary: #f0f6fc;
+  --text-secondary: #c9d1d9;
+  --text-muted: #8b949e;
+  
+  /* Compact Spacing and Utilities */
+  --glass-bg: rgba(21, 25, 29, 0.95);
+  --glass-border: rgba(59, 65, 73, 0.4);
+  --glass-blur: 8px;
+  
+  /* Layout Sizing (Narrower) */
+  --sidebar-width: 64px;
+  --conv-list-width: 320px;
+  
+  /* Shadows & Depth */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.8);
+  
+  /* Radii (More Rounded per User Feedback) */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+  
+  /* Transitions (Fast/Snappy) */
+  --transition-fast: 100ms ease;
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Utilities */
+.glass-effect {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.premium-gradient {
+  background: var(--accent-primary);
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Typography & Layout Utilities (Information Density) */
+.text-xxs {
+  font-size: 0.65rem;
+  line-height: 1rem;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-sm {
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.25rem;
+}
+
+/* Micro-animations */
+@keyframes fadeInCompact {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeInCompact var(--transition-base) forwards;
+}
