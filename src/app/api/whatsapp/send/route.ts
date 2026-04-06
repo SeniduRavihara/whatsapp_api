@@ -6,8 +6,16 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+// HARDCODED CREDENTIALS (TO FORCE A FIX)
+const PHONE_NUMBER_ID = "1078540015338881";
+const WHATSAPP_TOKEN = "EAAcTjkUHW0QBRIX5aKZCuXDcVpAwmt7U9Olwur169LMQOzB2nX1Hjm8QAZAW6PWPUOtypRbSquMQcRFNTs7f1rGZCvTQzgrEHd9w4One9mUwOKgrspYd0ZA77mk7CZAZBpr78OHzEnKhGOZAyZCjh2AZCEBi9ZCTJktRJKZCEnjsmXQLn0GSZBXwiCY56eSCaGJZC3KMmuMRpg9zdCmbpgMA8sMpD8HGSGONSRan0BOcjcdBM4uDiuZCskY4Rtu12hO9fT6E2S0g80SFjNBWwIVIUedNSW";
+
+if (!WHATSAPP_TOKEN) {
+  console.error("❌ CRITICAL: WHATSAPP_TOKEN is missing from environment variables!");
+}
+if (!PHONE_NUMBER_ID) {
+  console.error("❌ CRITICAL: WHATSAPP_PHONE_NUMBER_ID is missing from environment variables!");
+}
 
 export async function POST(request: Request) {
   try {
@@ -18,7 +26,11 @@ export async function POST(request: Request) {
     }
 
     // 1. Send message via Meta Cloud API
-    const url = `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`;
+    const url = `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`;
+    
+    console.log(`📡 Sending to Meta... URL: ${url}`);
+    console.log(`🔑 Token Preview: ${WHATSAPP_TOKEN?.substring(0, 10)}... (Length: ${WHATSAPP_TOKEN?.length})`);
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
