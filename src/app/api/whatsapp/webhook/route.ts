@@ -130,17 +130,54 @@ export async function POST(request: Request) {
 async function getMediaUrl(media_id: string) {
   try {
     const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-    if (!WHATSAPP_TOKEN) return null;
+    if (!WHATSAPP_TOKEN) {
+      console.error('❌ MISSING WHATSAPP_TOKEN');
+      return null;
+    }
 
-    const url = `https://graph.facebook.com/v22.0/${media_id}`;
-    const response = await fetch(url, {
+    // 1. Get Meta Media Metadata
+    const metaUrl = `https://graph.facebook.com/v18.0/${media_id}`;
+    const metaRes = await fetch(metaUrl, {
       headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
     });
     
-    const data = await response.json();
-    return data.url || null;
+    const metaData = await metaRes.json();
+    if (!metaData.url) {
+      console.error('❌ Meta Media Metadata fetch failed:', metaData);
+      return null;
+    }
+
+    // 2. Download Binary Data from Meta
+    const downloadRes = await fetch(metaData.url, {
+      headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+    });
+    const buffer = await downloadRes.arrayBuffer();
+
+    // 3. Upload to Supabase Storage
+    const fileName = `${Date.now()}-${media_id}.${metaData.mime_type?.split('/')[1] || 'bin'}`;
+    const { data: uploadData, error: uploadError } = await supabaseAdmin
+      .storage
+      .from('whatsapp_media')
+      .upload(fileName, buffer, {
+        contentType: metaData.mime_type,
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.error('❌ Supabase Upload Error:', uploadError);
+      // Fallback: If bucket doesn't exist, try to return meta URL (might not work in browser)
+      return metaData.url;
+    }
+
+    // 4. Get Public URL
+    const { data: publicUrlData } = supabaseAdmin
+      .storage
+      .from('whatsapp_media')
+      .getPublicUrl(fileName);
+
+    return publicUrlData.publicUrl;
   } catch (error) {
-    console.error('Error fetching media URL:', error);
+    console.error('❌ Critical Error in Media Pipeline:', error);
     return null;
   }
 }
