@@ -40,30 +40,6 @@ export async function POST(request: Request) {
       return new NextResponse(JSON.stringify(data), { status: response.status });
     }
 
-    const wa_id = data.messages?.[0]?.id;
-
-    // 2. Save message to Supabase
-    const { error: msgError } = await supabaseAdmin
-      .from('messages')
-      .insert({
-        wa_id: wa_id,
-        contact_phone: phone,
-        text: text,
-        sender: 'me',
-        status: 'sent'
-      });
-
-    if (msgError) console.error('Supabase Error:', msgError);
-
-    // 3. Update contact's last message
-    await supabaseAdmin
-      .from('contacts')
-      .update({
-        last_message: text,
-        last_message_at: new Date().toISOString()
-      })
-      .eq('phone', phone);
-
     return new NextResponse(JSON.stringify(data), { status: 200 });
   } catch (error) {
     console.error('Send API Error:', error);

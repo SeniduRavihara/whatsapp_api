@@ -28,6 +28,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    
+    // Log the entire body for EASY testing in your console/logs
+    console.log('✅ NEW WHATSAPP WEBHOOK RECEIVED:', JSON.stringify(body, null, 2));
 
     // Check if it's a valid WhatsApp message event
     if (body.object === 'whatsapp_business_account') {
@@ -35,57 +38,8 @@ export async function POST(request: Request) {
       const changes = entry?.changes?.[0];
       const value = changes?.value;
 
-      // Handle actual messages
       if (value?.messages) {
-        for (const message of value.messages) {
-          const from = message.from; // User's phone number
-          const text = message.text?.body || '';
-          const wa_id = message.id;
-          const senderName = value.contacts?.[0]?.profile?.name || 'Unknown';
-
-          // 1. Ensure contact exists in Supabase
-          const { error: contactError } = await supabaseAdmin
-            .from('contacts')
-            .upsert(
-              { 
-                phone: from, 
-                name: senderName,
-                last_message: text,
-                last_message_at: new Date().toISOString()
-              },
-              { onConflict: 'phone' }
-            );
-
-          if (contactError) console.error('Contact Upsert Error:', contactError);
-
-          // 2. Insert message into Supabase
-          const { error: msgError } = await supabaseAdmin
-            .from('messages')
-            .insert({
-              wa_id: wa_id,
-              contact_phone: from,
-              text: text,
-              sender: 'them',
-              status: 'delivered'
-            });
-
-          if (msgError && msgError.code !== '23505') { // Ignore duplicate wa_id
-            console.error('Message Insert Error:', msgError);
-          }
-        }
-      }
-
-      // Handle message status updates (sent, delivered, read)
-      if (value?.statuses) {
-        for (const statusUpdate of value.statuses) {
-          const wa_id = statusUpdate.id;
-          const status = statusUpdate.status;
-
-          await supabaseAdmin
-            .from('messages')
-            .update({ status: status })
-            .eq('wa_id', wa_id);
-        }
+        console.log('💬 Message Body:', value.messages[0].text?.body);
       }
 
       return new NextResponse('OK', { status: 200 });
@@ -93,7 +47,7 @@ export async function POST(request: Request) {
 
     return new NextResponse('Not a WhatsApp event', { status: 404 });
   } catch (error) {
-    console.error('Webhook Error:', error);
+    console.error('❌ Webhook Error:', error);
     return new NextResponse('Error', { status: 500 });
   }
 }
