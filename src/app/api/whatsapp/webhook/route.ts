@@ -40,10 +40,33 @@ export async function POST(request: Request) {
       // Handle actual messages
       if (value?.messages) {
         for (const message of value.messages) {
-          const from = message.from; // User's phone number
-          const text = message.text?.body || '';
+          const from = message.from;
           const wa_id = message.id;
+          const messageType = message.type || 'text';
           const senderName = value.contacts?.[0]?.profile?.name || 'Unknown';
+          
+          let text = message.text?.body || '';
+          let mediaUrl = null;
+          let mimeType = null;
+          let caption = null;
+
+          // Handle Multimedia (Image, Document, Video, etc.)
+          if (messageType !== 'text') {
+            const mediaData = message[messageType];
+            if (mediaData) {
+              const media_id = mediaData.id;
+              caption = mediaData.caption || null;
+              mimeType = mediaData.mime_type || null;
+              
+              // Fetch authenticated URL from Meta
+              mediaUrl = await getMediaUrl(media_id);
+              
+              // Fallback text for the preview
+              if (!text) {
+                text = caption || `[${messageType}]`;
+              }
+            }
+          }
 
           // 1. Ensure contact exists in Supabase
           const { error: contactError } = await supabaseAdmin
@@ -67,17 +90,21 @@ export async function POST(request: Request) {
               wa_id: wa_id,
               contact_phone: from,
               text: text,
+              message_type: messageType,
+              media_url: mediaUrl,
+              mime_type: mimeType,
+              caption: caption,
               sender: 'them',
               status: 'delivered'
             });
 
-          if (msgError && msgError.code !== '23505') { // Ignore duplicate wa_id
+          if (msgError && msgError.code !== '23505') {
             console.error('Message Insert Error:', msgError);
           }
         }
       }
 
-      // Handle message status updates (sent, delivered, read)
+      // Handle message status updates
       if (value?.statuses) {
         for (const statusUpdate of value.statuses) {
           const wa_id = statusUpdate.id;
@@ -97,5 +124,23 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('❌ Webhook Error:', error);
     return new NextResponse('Error', { status: 500 });
+  }
+}
+
+async function getMediaUrl(media_id: string) {
+  try {
+    const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
+    if (!WHATSAPP_TOKEN) return null;
+
+    const url = `https://graph.facebook.com/v22.0/${media_id}`;
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+    });
+    
+    const data = await response.json();
+    return data.url || null;
+  } catch (error) {
+    console.error('Error fetching media URL:', error);
+    return null;
   }
 }

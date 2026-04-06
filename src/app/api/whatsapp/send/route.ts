@@ -6,15 +6,15 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 );
 
-// HARDCODED CREDENTIALS (TO FORCE A FIX)
-const PHONE_NUMBER_ID = "1078540015338881";
-const WHATSAPP_TOKEN = "EAAcTjkUHW0QBRIX5aKZCuXDcVpAwmt7U9Olwur169LMQOzB2nX1Hjm8QAZAW6PWPUOtypRbSquMQcRFNTs7f1rGZCvTQzgrEHd9w4One9mUwOKgrspYd0ZA77mk7CZAZBpr78OHzEnKhGOZAyZCjh2AZCEBi9ZCTJktRJKZCEnjsmXQLn0GSZBXwiCY56eSCaGJZC3KMmuMRpg9zdCmbpgMA8sMpD8HGSGONSRan0BOcjcdBM4uDiuZCskY4Rtu12hO9fT6E2S0g80SFjNBWwIVIUedNSW";
+// Use environment variables for WhatsApp Business API
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 
-if (!WHATSAPP_TOKEN) {
-  console.error("❌ CRITICAL: WHATSAPP_TOKEN is missing from environment variables!");
-}
-if (!PHONE_NUMBER_ID) {
-  console.error("❌ CRITICAL: WHATSAPP_PHONE_NUMBER_ID is missing from environment variables!");
+if (!WHATSAPP_TOKEN || !PHONE_NUMBER_ID) {
+  const missing = [];
+  if (!WHATSAPP_TOKEN) missing.push("WHATSAPP_TOKEN");
+  if (!PHONE_NUMBER_ID) missing.push("WHATSAPP_PHONE_NUMBER_ID");
+  console.error(`❌ CRITICAL: Missing environment variables: ${missing.join(", ")}`);
 }
 
 export async function POST(request: Request) {

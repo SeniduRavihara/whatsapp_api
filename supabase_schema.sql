@@ -18,7 +18,10 @@ CREATE TABLE IF NOT EXISTS messages (
     wa_id TEXT UNIQUE, -- WhatsApp's unique message ID
     contact_phone TEXT REFERENCES contacts(phone) ON DELETE CASCADE,
     text TEXT,
-    message_type TEXT DEFAULT 'text',
+    message_type TEXT DEFAULT 'text', -- text, image, video, document, etc.
+    media_url TEXT,
+    mime_type TEXT,
+    caption TEXT,
     sender TEXT CHECK (sender IN ('me', 'them')),
     status TEXT DEFAULT 'sent', -- sent, delivered, read
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

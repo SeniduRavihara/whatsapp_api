@@ -1,50 +1,57 @@
+"use client";
+
 import React from 'react';
-import { LayoutDashboard, User, Flag, CheckCircle2, Archive, Settings, Cpu } from 'lucide-react';
 
 const Sidebar = () => {
   const navItems = [
-    { icon: LayoutDashboard, label: 'All', active: true },
-    { icon: User, label: 'Unassigned', active: false },
-    { icon: Flag, label: 'Flagged', active: false },
-    { icon: CheckCircle2, label: 'Resolved', active: false },
-    { icon: Archive, label: 'Archived', active: false },
+    { icon: 'chat', label: 'Chat', active: true },
+    { icon: 'contacts', label: 'Contacts' },
+    { icon: 'insights', label: 'Analytics' },
+    { icon: 'smart_toy', label: 'AI Automations' },
   ];
 
   return (
-    <aside className="flex h-full w-[var(--sidebar-width)] flex-col items-center py-4 bg-[#15191d] border-r border-[#24292e] z-50 shadow-lg">
-      <div className="w-10 h-10 rounded-xl bg-[#ff9900] flex items-center justify-center text-[#15191d] font-bold shrink-0 shadow-lg shadow-black/20 mb-8 border border-white/10">
-        <Cpu className="w-6 h-6 fill-current" />
+    <aside className="fixed left-0 top-0 h-full z-50 bg-[#e7e8e9] text-[#003752] font-headline font-semibold tracking-tight w-20 flex flex-col items-center py-6">
+      {/* Brand Logo */}
+      <div className="mb-8">
+        <span className="text-lg font-bold text-[#003752]">EW</span>
       </div>
-      
-      <nav className="flex flex-1 flex-col gap-2 w-full px-2">
-        {navItems.map((Item, i) => (
-          <button
-            key={i}
-            title={Item.label}
-            className={`flex h-11 w-full items-center justify-center rounded-xl transition-all duration-150 relative ${
-              Item.active 
-                ? 'bg-[#24292e] text-[#ff9900]' 
-                : 'text-slate-400 hover:bg-[#24292e] hover:text-white'
-            }`}
-          >
-            <Item.icon size={18} strokeWidth={2} />
-            {Item.active && (
-              <div className="absolute left-0 w-1 h-full bg-[#ff9900]" />
-            )}
-          </button>
-        ))}
-      </nav>
 
-      <div className="mt-auto flex flex-col gap-4 w-full px-2 pb-6">
-        <button className="flex h-11 w-full items-center justify-center rounded-xl text-slate-400 hover:bg-[#24292e] hover:text-white transition-all">
-          <Settings size={18} />
-        </button>
-        <div className="flex h-11 w-full items-center justify-center">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-black text-white border border-white/5 shadow-md">
-            JD
+      <nav className="flex flex-col gap-6 w-full items-center">
+        {navItems.map((item) => (
+          <div
+            key={item.label}
+            className={`transition-all duration-200 p-3 rounded-xl cursor-pointer group flex items-center justify-center ${
+              item.active 
+                ? 'text-[#003752] bg-white shadow-sm scale-110' 
+                : 'text-slate-400 hover:bg-slate-200 hover:text-[#003752]'
+            }`}
+            title={item.label}
+          >
+            <span 
+              className="material-symbols-outlined transition-transform duration-200 group-active:scale-90"
+              style={{ fontVariationSettings: item.active ? "'FILL' 1" : "'FILL' 0" }}
+            >
+              {item.icon}
+            </span>
           </div>
+        ))}
+
+        {/* Bottom Settings */}
+        <div className="mt-auto text-slate-400 p-3 hover:bg-slate-200 transition-colors rounded-xl cursor-pointer group" title="Settings">
+          <span className="material-symbols-outlined group-hover:text-[#003752]">settings</span>
         </div>
-      </div>
+        
+        {/* User Profile 1 (With Fallback) */}
+        <div className="mt-4 w-10 h-10 rounded-full border-2 border-white shadow-sm bg-[#cfe6f2] flex items-center justify-center text-[#526772] font-headline font-bold text-sm overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#003752]/20 transition-all">
+          S
+        </div>
+
+        {/* User Profile 2 (N) */}
+        <div className="mt-2 w-10 h-10 rounded-full bg-[#191c1d] flex items-center justify-center text-white font-headline font-bold text-sm border-2 border-white shadow-sm cursor-pointer hover:scale-105 transition-all">
+          N
+        </div>
+      </nav>
     </aside>
   );
 };

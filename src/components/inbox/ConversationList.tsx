@@ -1,18 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Search, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Contact } from '@/types';
 
 interface ConversationListProps {
   selectedPhone: string | null;
   onSelect: (phone: string) => void;
+  mode?: 'open' | 'mini';
 }
 
-const ConversationList = ({ selectedPhone, onSelect }: ConversationListProps) => {
+const ConversationList = ({ selectedPhone, onSelect, mode = 'open' }: ConversationListProps) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const isMini = mode === 'mini';
 
   useEffect(() => {
     fetchContacts();
@@ -45,70 +46,82 @@ const ConversationList = ({ selectedPhone, onSelect }: ConversationListProps) =>
   };
 
   return (
-    <div className="flex h-full w-[var(--conv-list-width)] flex-col bg-[#0d1117] border-r border-[#24292e]">
-      <header className="px-4 h-14 flex items-center justify-between border-b border-[#24292e] bg-[#15191d]">
-        <h2 className="text-xs font-bold text-white uppercase tracking-wider">Inboxes</h2>
-        <button className="p-1.5 text-slate-400 hover:text-white hover:bg-[#24292e] rounded transition-colors">
-          <Filter size={14} />
-        </button>
-      </header>
-      
-      <div className="p-2 border-b border-[#24292e] bg-[#15191d]">
-        <div className="relative group">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#ff9900] transition-colors z-10" />
-          <input
-            type="text"
-            placeholder="Search resources..."
-            className="w-full rounded-lg bg-[#24292e] py-1.5 pl-9 pr-3 text-[11px] text-slate-200 placeholder-slate-500 outline-none border border-[#3b4149] focus:border-[#ff9900]/50 transition-all font-medium"
-          />
+    <section className="w-full bg-[#f3f4f5] flex flex-col border-r border-[#e1e3e4] h-full overflow-hidden">
+      {/* Header */}
+      {!isMini && (
+        <div className="p-6 h-16 flex items-center justify-between shrink-0">
+          <h2 className="font-headline font-bold text-xl tracking-tight text-[#191c1d]">Messages</h2>
+          <span className="material-symbols-outlined text-[#727780] cursor-pointer hover:text-[#003752]" data-icon="edit_square">edit_square</span>
         </div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-4 bg-[#0d1117]">
+      )}
+
+      {/* Search */}
+      {!isMini && (
+        <div className="px-4 py-2 shrink-0">
+          <div className="bg-white rounded-full px-4 py-2 flex items-center gap-3 shadow-sm border border-[#e1e3e4]">
+            <span className="material-symbols-outlined text-[#727780] text-sm" data-icon="search">search</span>
+            <input 
+              className="bg-transparent border-none focus:ring-0 text-sm w-full font-body placeholder-[#727780]" 
+              placeholder="Search conversations..." 
+              type="text"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      <div className={`flex-1 overflow-y-auto no-scrollbar mt-4 space-y-1 ${isMini ? 'px-2' : 'px-2'}`}>
         {loading ? (
-          <div className="p-4 text-center text-slate-500 text-xs">Loading conversations...</div>
+          !isMini && <div className="p-4 text-center text-[#727780] text-xs font-medium">Loading resources...</div>
         ) : contacts.length === 0 ? (
-          <div className="p-4 text-center text-slate-500 text-xs">No conversations found</div>
+          !isMini && <div className="p-4 text-center text-[#727780] text-xs font-medium">No active conversations</div>
         ) : (
           contacts.map((contact) => (
             <div
               key={contact.id}
               onClick={() => onSelect(contact.phone)}
-              className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-all duration-150 border-b border-[#24292e]/50 ${
+              className={`rounded-xl flex items-center cursor-pointer transition-all duration-200 group relative ${
+                isMini ? 'p-2 justify-center' : 'p-4 gap-4'
+              } ${
                 selectedPhone === contact.phone 
-                  ? 'bg-[#24292e] text-white shadow-sm' 
-                  : 'text-slate-400 hover:bg-[#1c2128] hover:text-white'
+                  ? 'bg-[#e7e8e9] shadow-sm' 
+                  : 'hover:bg-[#edeeef]'
               }`}
+              title={isMini ? (contact.name || contact.phone) : ""}
             >
-              <div className="relative h-9 w-9 flex-shrink-0">
-                <div className={`h-full w-full rounded-lg bg-[#1c2128] border border-[#3b4149] flex items-center justify-center text-[10px] font-bold ${selectedPhone === contact.phone ? 'text-[#ff9900]' : 'text-slate-500'}`}>
-                  {contact.name?.charAt(0) || '?'}
+              <div className="relative flex-shrink-0">
+                <div className={`${isMini ? 'w-10 h-10' : 'w-12 h-12'} rounded-full overflow-hidden border-2 ${selectedPhone === contact.phone ? 'border-[#003752]' : 'border-transparent'} transition-all`}>
+                  {contact.avatar_url ? (
+                    <img src={contact.avatar_url} alt={contact.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-[#cfe6f2] flex items-center justify-center text-[#526772] font-headline font-bold text-sm uppercase">
+                      {contact.name?.charAt(0) || '?'}
+                    </div>
+                  )}
                 </div>
-                {contact.unread_count > 0 && (
-                  <div className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded bg-[#ff9900] px-1 text-[8px] font-black text-[#15191d] shadow-md border border-[#15191d]">
-                    {contact.unread_count}
+                <div className={`absolute bottom-0 right-0 ${isMini ? 'w-2.5 h-2.5' : 'w-3 h-3'} bg-[#3de273] rounded-full border-2 border-white shadow-sm`}></div>
+              </div>
+
+              {!isMini && (
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={`font-headline font-bold truncate text-sm tracking-tight ${selectedPhone === contact.phone ? 'text-[#003752]' : 'text-[#191c1d]'}`}>
+                      {contact.name || contact.phone}
+                    </span>
+                    <span className="text-[10px] text-[#727780] font-bold tabular-nums">
+                      {new Date(contact.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                )}
-              </div>
-              
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`truncate text-xs font-bold tracking-tight ${selectedPhone === contact.phone ? 'text-[#ff9900]' : 'text-slate-300'}`}>
-                    {contact.name || contact.phone}
-                  </span>
-                  <span className="text-[9px] text-slate-500 font-bold tabular-nums">
-                    {new Date(contact.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <p className={`text-xs truncate font-body leading-normal ${contact.unread_count > 0 ? 'text-[#191c1d] font-semibold' : 'text-[#42474f]'}`}>
+                    {contact.last_message}
+                  </p>
                 </div>
-                <p className={`mt-0.5 truncate text-[10px] font-medium leading-normal ${contact.unread_count > 0 ? 'text-slate-200' : 'text-slate-500'}`}>
-                  {contact.last_message}
-                </p>
-              </div>
+              )}
             </div>
           ))
         )}
       </div>
-    </div>
+    </section>
   );
 };
 
