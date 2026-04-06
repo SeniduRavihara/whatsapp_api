@@ -55,11 +55,12 @@ export async function POST(request: Request) {
             const mediaData = message[messageType];
             if (mediaData) {
               const media_id = mediaData.id;
+              const phone_number_id = value.metadata?.phone_number_id; 
               caption = mediaData.caption || null;
               mimeType = mediaData.mime_type || null;
               
-              // Fetch authenticated URL from Meta
-              mediaUrl = await getMediaUrl(media_id);
+              // Fetch authenticated URL from Meta with scoping
+              mediaUrl = await getMediaUrl(media_id, phone_number_id);
               
               // Fallback text for the preview
               if (!text) {
@@ -127,34 +128,58 @@ export async function POST(request: Request) {
   }
 }
 
-async function getMediaUrl(media_id: string) {
+async function getMediaUrl(media_id: string, phone_number_id?: string) {
   try {
     const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
     if (!WHATSAPP_TOKEN) {
-      console.error('❌ MISSING WHATSAPP_TOKEN');
+      console.error('❌ NO TOKEN FOUND IN ENV');
       return null;
     }
 
-    // 1. Get Meta Media Metadata
-    const metaUrl = `https://graph.facebook.com/v18.0/${media_id}`;
+    // 1. Get Meta Media Metadata (v21.0 + scoping)
+    let metaUrl = `https://graph.facebook.com/v21.0/${media_id}`;
+    if (phone_number_id) {
+      metaUrl += `?phone_number_id=${phone_number_id}`;
+    }
+    
+    console.log(`📡 Fetching Meta URL for ${media_id} (Scoping: ${phone_number_id})...`);
+    
     const metaRes = await fetch(metaUrl, {
-      headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+      headers: { 
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+        'User-Agent': 'Stitch-CRM/1.0'
+      }
     });
     
     const metaData = await metaRes.json();
+    console.log('📦 META RAW DATA:', JSON.stringify(metaData, null, 2));
+
     if (!metaData.url) {
-      console.error('❌ Meta Media Metadata fetch failed:', metaData);
+      console.error('❌ Meta failed to provide a URL. Response:', metaData);
       return null;
     }
 
-    // 2. Download Binary Data from Meta
+    // 2. Download Binary Data
+    console.log('⬇️ Downloading binary from Meta...');
     const downloadRes = await fetch(metaData.url, {
-      headers: { 'Authorization': `Bearer ${WHATSAPP_TOKEN}` }
+      headers: { 
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+        'User-Agent': 'Stitch-CRM/1.0'
+      }
     });
+    
+    if (!downloadRes.ok) {
+      console.error(`❌ Download failed with status: ${downloadRes.status}`);
+      return null;
+    }
+
     const buffer = await downloadRes.arrayBuffer();
+    console.log(`✅ Downloaded ${buffer.byteLength} bytes`);
 
     // 3. Upload to Supabase Storage
     const fileName = `${Date.now()}-${media_id}.${metaData.mime_type?.split('/')[1] || 'bin'}`;
+    console.log(`📤 Uploading to Supabase as ${fileName}...`);
+    
     const { data: uploadData, error: uploadError } = await supabaseAdmin
       .storage
       .from('whatsapp_media')
@@ -164,9 +189,8 @@ async function getMediaUrl(media_id: string) {
       });
 
     if (uploadError) {
-      console.error('❌ Supabase Upload Error:', uploadError);
-      // Fallback: If bucket doesn't exist, try to return meta URL (might not work in browser)
-      return metaData.url;
+      console.error('❌ Supabase Upload Failed:', uploadError);
+      return metaData.url; // Fallback to Meta URL if available
     }
 
     // 4. Get Public URL
@@ -175,9 +199,10 @@ async function getMediaUrl(media_id: string) {
       .from('whatsapp_media')
       .getPublicUrl(fileName);
 
+    console.log('🚀 PERMANENT URL GENERATED:', publicUrlData.publicUrl);
     return publicUrlData.publicUrl;
-  } catch (error) {
-    console.error('❌ Critical Error in Media Pipeline:', error);
+  } catch (error: any) {
+    console.error('❌ CRITICAL MEDIA ERROR:', error.message);
     return null;
   }
 }
