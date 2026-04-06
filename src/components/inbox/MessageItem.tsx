@@ -2,7 +2,7 @@ import React from 'react';
 import { Check, CheckCheck } from 'lucide-react';
 
 interface MessageProps {
-  id: number;
+  id: string | number;
   text: string;
   sender: 'me' | 'them';
   time: string;

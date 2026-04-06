@@ -4,25 +4,78 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Lock, Unlock, Phone, Search, MoreVertical, Menu, Bell, HelpCircle, ChevronRight } from 'lucide-react';
 import MessageItem from './MessageItem';
 import MessageInput from './MessageInput';
+import { supabase } from '@/lib/supabase';
+import { Message, Contact } from '@/types';
 
-const ChatWindow = () => {
+interface ChatWindowProps {
+  contactPhone: string;
+}
+
+const ChatWindow = ({ contactPhone }: ChatWindowProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isLocked, setIsLocked] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [contact, setContact] = useState<Contact | null>(null);
+  const [loading, setLoading] = useState(true);
   
-  const mockMessages = [
-    { id: 1, text: "Hello! How can I help you today?", sender: 'them', time: '12:45 PM' },
-    { id: 2, text: "I'm interested in your business services.", sender: 'me', time: '12:46 PM', status: 'read' },
-    { id: 3, text: "Great! We offer a variety of cloud-based solutions tailored for small businesses.", sender: 'them', time: '12:47 PM' },
-    { id: 4, text: "Could you send me a price list?", sender: 'me', time: '12:48 PM', status: 'delivered' },
-    { id: 5, text: "Of course! Let me pull that up for you.", sender: 'them', time: '12:49 PM' },
-    { id: 6, text: "Also, what are your opening hours?", sender: 'them', time: '12:50 PM' },
-  ];
+  useEffect(() => {
+    fetchContact();
+    fetchMessages();
+
+    // Subscribe to messages for THIS contact
+    const channel = supabase
+      .channel(`chat:${contactPhone}`)
+      .on(
+        'postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `contact_phone=eq.${contactPhone}`
+        }, 
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setMessages(prev => [...prev, payload.new as Message]);
+          } else if (payload.eventType === 'UPDATE') {
+            setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new as Message : m));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [contactPhone]);
+
+  const fetchContact = async () => {
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('phone', contactPhone)
+      .single();
+    setContact(data);
+  };
+
+  const fetchMessages = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('contact_phone', contactPhone)
+      .order('created_at', { ascending: true });
+
+    if (!error) {
+      setMessages(data || []);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (!isLocked && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [mockMessages, isLocked]);
+  }, [messages, isLocked]);
 
   return (
     <div className="flex flex-1 flex-col h-full bg-[#0d1117]">
@@ -36,12 +89,12 @@ const ChatWindow = () => {
           <div className="h-6 w-[1px] bg-[#24292e] mx-1" />
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#1c2128] border border-[#3b4149] flex items-center justify-center text-[10px] font-bold text-[#ff9900]">
-              AJ
+              {contact?.name?.charAt(0) || contactPhone.charAt(0)}
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-white leading-none">Alice Johnson</span>
+              <span className="text-xs font-bold text-white leading-none">{contact?.name || contactPhone}</span>
               <span className="text-[9px] font-medium text-emerald-500 mt-0.5 flex items-center gap-1">
-                <span className="h-1 w-1 rounded-full bg-emerald-500 shadow-sm" /> Online
+                <span className="h-1 w-1 rounded-full bg-emerald-500 shadow-sm" /> Connected
               </span>
             </div>
           </div>
@@ -78,7 +131,7 @@ const ChatWindow = () => {
       {/* Messages */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-4 no-scrollbar relative bg-[#0d1117] bg-pattern-cube"
+        className="flex-1 overflow-y-auto px-6 py-4 no-scrollbar relative bg-[#0d1117]"
         onScroll={(e) => {
           const target = e.currentTarget;
           const isAtBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 1;
@@ -86,28 +139,30 @@ const ChatWindow = () => {
         }}
       >
         <div className="max-w-[1200px] mx-auto flex flex-col pt-4">
-          <div className="mb-6 flex justify-center">
-            <span className="px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-500 border-b border-[#24292e]">
-              --- April 05, 2024 ---
-            </span>
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            {mockMessages.map((msg) => (
-              <MessageItem 
-                key={msg.id} 
-                id={msg.id}
-                text={msg.text} 
-                sender={msg.sender as 'me' | 'them'} 
-                time={msg.time}
-                status={msg.status as any}
-              />
-            ))}
-          </div>
+          {loading && messages.length === 0 ? (
+             <div className="flex justify-center p-8 text-slate-500 text-xs">Loading history...</div>
+          ) : messages.length === 0 ? (
+            <div className="flex justify-center p-8 text-slate-600 text-[10px] uppercase font-bold tracking-widest italic opacity-50">
+              No message history with this contact
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {messages.map((msg) => (
+                <MessageItem 
+                  key={msg.id} 
+                  id={msg.id as any}
+                  text={msg.text} 
+                  sender={msg.sender} 
+                  time={new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  status={msg.status}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      <MessageInput />
+      <MessageInput contactPhone={contactPhone} />
     </div>
   );
 };
