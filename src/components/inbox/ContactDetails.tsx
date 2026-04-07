@@ -10,25 +10,29 @@ interface ContactDetailsProps {
 }
 
 const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
-  const [sharedMedia, setSharedMedia] = useState<string[]>([]);
+  const [sharedMedia, setSharedMedia] = useState<
+    { media_url: string; message_type: string }[]
+  >([]);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [newTagText, setNewTagText] = useState("");
-  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(
+    null
+  );
 
   const fetchSharedMedia = useCallback(async () => {
     if (!contact?.phone) return;
     const { data } = await supabase
       .from("messages")
-      .select("media_url")
+      .select("media_url, message_type")
       .eq("contact_phone", contact.phone)
-      .eq("message_type", "image")
+      .in("message_type", ["image", "video"])
       .not("media_url", "is", null)
       .order("created_at", { ascending: false });
 
     if (data) {
-      setSharedMedia(data.map((m) => m.media_url).filter(Boolean) as string[]);
+      setSharedMedia(data as { media_url: string; message_type: string }[]);
     }
   }, [contact?.phone]);
 
@@ -73,7 +77,7 @@ const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
   if (!contact) return null;
 
   return (
-    <aside className="w-full bg-[#f3f4f5] hidden xl:flex flex-col border-l border-[#e1e3e4] animate-in slide-in-from-right duration-300">
+    <aside className="w-full bg-[#f3f4f5] flex flex-col h-full overflow-hidden border-l border-[#e1e3e4] animate-in slide-in-from-right duration-300">
       <div className="h-16 flex items-center justify-between px-6 border-b border-[#e1e3e4]">
         <h3 className="font-headline font-bold text-[10px] tracking-widest uppercase text-[#727780]">
           Contact Details
@@ -88,7 +92,7 @@ const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
         )}
       </div>
 
-      <div className="p-6 space-y-8 overflow-y-auto no-scrollbar">
+      <div className="flex-1 p-6 space-y-8 overflow-y-auto no-scrollbar">
         {/* Profile Card */}
         <div className="text-center">
           <div className="relative inline-block mb-4">
@@ -139,17 +143,31 @@ const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
           </h5>
           <div className="grid grid-cols-3 gap-2">
             {sharedMedia.length > 0 ? (
-              sharedMedia.slice(0, 5).map((url, i) => (
+              sharedMedia.slice(0, 5).map((media, i) => (
                 <div
                   key={i}
-                  onClick={() => setIsMediaModalOpen(true)}
-                  className="w-full aspect-square rounded-lg bg-[#e1e3e4] overflow-hidden border border-[#e1e3e4] cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setSelectedMediaIndex(i)}
+                  className="w-full aspect-square rounded-lg bg-[#2d3133] overflow-hidden border border-[#e1e3e4] cursor-pointer hover:opacity-90 transition-opacity relative group"
                 >
-                  <img
-                    src={url}
-                    alt="Shared media"
-                    className="w-full h-full object-cover"
-                  />
+                  {media.message_type === "video" ? (
+                    <>
+                      <video
+                        src={media.media_url}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-white drop-shadow-md">
+                          play_circle
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={media.media_url}
+                      alt="Shared media"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                 </div>
               ))
             ) : (
@@ -159,7 +177,7 @@ const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
             )}
             {sharedMedia.length > 5 && (
               <div
-                onClick={() => setIsMediaModalOpen(true)}
+                onClick={() => setSelectedMediaIndex(5)}
                 className="w-full aspect-square rounded-lg bg-[#edeeef] flex flex-col items-center justify-center text-[#727780] cursor-pointer hover:bg-[#e7e8e9] transition-colors"
               >
                 <span className="material-symbols-outlined text-lg">image</span>
@@ -330,49 +348,120 @@ const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
         </div>
       </div>
 
-      {/* Media Overlay Modal */}
-      {isMediaModalOpen && (
+      {/* Media Overlay Modal (WhatsApp Gallery Style) */}
+      {selectedMediaIndex !== null && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 md:p-12 animate-in fade-in duration-200"
-          onClick={() => setIsMediaModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col animate-in fade-in duration-200"
+          onClick={() => setSelectedMediaIndex(null)}
         >
-          <button
-            className="fixed top-6 right-6 text-white hover:text-gray-300 bg-black/50 rounded-full w-10 h-10 flex items-center justify-center transition-colors"
-            onClick={() => setIsMediaModalOpen(false)}
-          >
-            <span className="material-symbols-outlined text-2xl">close</span>
-          </button>
+          {/* Top Bar */}
+          <div className="h-16 flex items-center justify-between px-6 bg-gradient-to-b from-black/80 to-transparent">
+            {/* Download/Open Button */}
+            <a
+              href={sharedMedia[selectedMediaIndex]?.media_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-white/80 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+              onClick={(e) => e.stopPropagation()}
+              title="Open Original"
+            >
+              <span className="material-symbols-outlined text-xl">
+                open_in_new
+              </span>
+            </a>
 
+            <button
+              className="text-white/80 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+              onClick={() => setSelectedMediaIndex(null)}
+            >
+              <span className="material-symbols-outlined text-2xl">close</span>
+            </button>
+          </div>
+
+          {/* Main View Area */}
           <div
-            className="w-full h-full max-w-5xl max-h-screen bg-[#191c1d] rounded-2xl overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()} // Prevent click from closing when clicking inside
+            className="flex-1 relative flex items-center justify-center overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-[#2d3133] flex justify-between items-center bg-[#191c1d]">
-              <h3 className="text-white font-headline font-semibold">
-                Shared Media ({sharedMedia.length})
-              </h3>
+            {/* Prev Button */}
+            {selectedMediaIndex > 0 && (
+              <button
+                className="absolute left-4 md:left-12 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all z-10"
+                onClick={() => setSelectedMediaIndex((prev) => prev! - 1)}
+              >
+                <span className="material-symbols-outlined text-2xl">
+                  chevron_left
+                </span>
+              </button>
+            )}
+
+            {/* Current Media */}
+            <div className="w-full h-full max-w-5xl max-h-[75vh] flex items-center justify-center p-4">
+              {sharedMedia[selectedMediaIndex]?.message_type === "video" ? (
+                <video
+                  src={sharedMedia[selectedMediaIndex]?.media_url}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-full object-contain rounded-sm"
+                />
+              ) : (
+                <img
+                  src={sharedMedia[selectedMediaIndex]?.media_url}
+                  alt="Gallery content"
+                  className="max-w-full max-h-full object-contain rounded-sm"
+                />
+              )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {sharedMedia.map((url, i) => (
-                <a
+            {/* Next Button */}
+            {selectedMediaIndex < sharedMedia.length - 1 && (
+              <button
+                className="absolute right-4 md:right-12 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all z-10"
+                onClick={() => setSelectedMediaIndex((prev) => prev! + 1)}
+              >
+                <span className="material-symbols-outlined text-2xl">
+                  chevron_right
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Thumbnails Strip */}
+          <div
+            className="h-32 bg-black flex items-center overflow-x-auto px-4 py-4 gap-2 no-scrollbar scroll-smooth"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex mx-auto gap-2 min-w-min">
+              {sharedMedia.map((media, i) => (
+                <button
                   key={i}
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="aspect-square rounded-xl overflow-hidden bg-[#2d3133] hover:opacity-80 transition-opacity relative group"
+                  onClick={() => setSelectedMediaIndex(i)}
+                  className={`relative shrink-0 h-16 md:h-20 aspect-square overflow-hidden rounded-sm transition-all ${
+                    selectedMediaIndex === i
+                      ? "ring-2 ring-white scale-100 opacity-100"
+                      : "opacity-40 hover:opacity-100 scale-95"
+                  }`}
                 >
-                  <img
-                    src={url}
-                    alt="Shared media"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                    <span className="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 rounded-full p-2">
-                      open_in_new
-                    </span>
-                  </div>
-                </a>
+                  {media.message_type === "video" ? (
+                    <>
+                      <video
+                        src={media.media_url}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <span className="material-symbols-outlined text-white text-lg drop-shadow-md">
+                          play_circle
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={media.media_url}
+                      alt="Thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </button>
               ))}
             </div>
           </div>

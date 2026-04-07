@@ -26,7 +26,29 @@ const ChatWindow = ({
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(
+    null
+  );
+  const [galleryMediaIndex, setGalleryMediaIndex] = useState<number | null>(
+    null
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Compute media items for gallery
+  const chatMedia = messages.filter(
+    (m) =>
+      (m.message_type === "image" || m.message_type === "video") && m.media_url
+  );
+
+  useEffect(() => {
+    return () => {
+      // Cleanup object URL to avoid memory leaks
+      if (selectedFilePreview) {
+        URL.revokeObjectURL(selectedFilePreview);
+      }
+    };
+  }, [selectedFilePreview]);
 
   useEffect(() => {
     fetchContact();
@@ -101,24 +123,80 @@ const ChatWindow = ({
   }, [messages]);
 
   const handleSend = async () => {
-    if (!messageText.trim() || isSending) return;
+    if ((!messageText.trim() && !selectedFile) || isSending) return;
 
     setIsSending(true);
     try {
-      const response = await fetch("/api/whatsapp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: contactPhone,
-          text: messageText.trim(),
-        }),
-      });
+      if (selectedFile) {
+        // 1. Upload to Supabase Storage
+        const fileName = `${Date.now()}-${selectedFile.name.replace(
+          /[^a-zA-Z0-9.-]/g,
+          "_"
+        )}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("whatsapp_media")
+          .upload(fileName, selectedFile, {
+            contentType: selectedFile.type,
+            upsert: true,
+          });
 
-      if (response.ok) {
-        setMessageText("");
+        if (uploadError) {
+          console.error("Upload Error:", uploadError);
+          setIsSending(false);
+          return;
+        }
+
+        // 2. Get Public URL
+        const { data: publicUrlData } = supabase.storage
+          .from("whatsapp_media")
+          .getPublicUrl(fileName);
+
+        const mediaUrl = publicUrlData.publicUrl;
+
+        // 3. Determine WhatsApp media type
+        let type = "document";
+        if (selectedFile.type.startsWith("image/")) type = "image";
+        else if (selectedFile.type.startsWith("video/")) type = "video";
+        else if (selectedFile.type.startsWith("audio/")) type = "audio";
+
+        // 4. Send message via API
+        const response = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: contactPhone,
+            type,
+            mediaUrl,
+            mimeType: selectedFile.type,
+            caption: messageText.trim() || undefined,
+          }),
+        });
+
+        if (response.ok) {
+          setMessageText("");
+          setSelectedFile(null);
+          setSelectedFilePreview(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } else {
+          const error = await response.json();
+          console.error("Failed to send media:", error);
+        }
       } else {
-        const error = await response.json();
-        console.error("Failed to send:", error);
+        const response = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: contactPhone,
+            text: messageText.trim(),
+          }),
+        });
+
+        if (response.ok) {
+          setMessageText("");
+        } else {
+          const error = await response.json();
+          console.error("Failed to send:", error);
+        }
       }
     } catch (error) {
       console.error("Error sending:", error);
@@ -134,70 +212,13 @@ const ChatWindow = ({
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsSending(true);
-    try {
-      // 1. Upload to Supabase Storage
-      const fileName = `${Date.now()}-${file.name.replace(
-        /[^a-zA-Z0-9.-]/g,
-        "_"
-      )}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("whatsapp_media")
-        .upload(fileName, file, {
-          contentType: file.type,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error("Upload Error:", uploadError);
-        setIsSending(false);
-        return;
-      }
-
-      // 2. Get Public URL
-      const { data: publicUrlData } = supabase.storage
-        .from("whatsapp_media")
-        .getPublicUrl(fileName);
-
-      const mediaUrl = publicUrlData.publicUrl;
-
-      // 3. Determine WhatsApp media type
-      let type = "document";
-      if (file.type.startsWith("image/")) type = "image";
-      else if (file.type.startsWith("video/")) type = "video";
-      else if (file.type.startsWith("audio/")) type = "audio";
-
-      // 4. Send message via API
-      const response = await fetch("/api/whatsapp/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: contactPhone,
-          type,
-          mediaUrl,
-          mimeType: file.type,
-          caption: messageText.trim() || undefined,
-        }),
-      });
-
-      if (response.ok) {
-        setMessageText("");
-      } else {
-        const error = await response.json();
-        console.error("Failed to send media:", error);
-      }
-    } catch (error) {
-      console.error("Error sending media:", error);
-    } finally {
-      setIsSending(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedFilePreview(objectUrl);
   };
 
   const handleGenerateSummary = async () => {
@@ -356,6 +377,10 @@ const ChatWindow = ({
             mediaUrl={msg.media_url}
             mimeType={msg.mime_type}
             caption={msg.caption}
+            onMediaClick={(url) => {
+              const i = chatMedia.findIndex((m) => m.media_url === url);
+              if (i >= 0) setGalleryMediaIndex(i);
+            }}
           />
         ))}
 
@@ -386,55 +411,217 @@ const ChatWindow = ({
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl p-2 flex items-end gap-3 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-[#e1e3e4] focus-within:border-[#003752]/30 transition-all">
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              onChange={handleFileUpload}
-              accept="image/*,video/*,audio/*,application/pdf"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isSending}
-              className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors"
-            >
-              <span className="material-symbols-outlined">add</span>
-            </button>
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isSending}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-body py-2.5 resize-none max-h-32 min-h-[44px]"
-              placeholder="Type your message here..."
-              rows={1}
-            />
-            <div className="flex items-center gap-2 pb-1 pr-1">
+          <div className="bg-white rounded-2xl p-2 flex flex-col gap-2 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-[#e1e3e4] focus-within:border-[#003752]/30 transition-all relative">
+            {/* MEDIA PREVIEW SECTION */}
+            {selectedFilePreview && (
+              <div className="relative self-start mt-2 ml-2 mb-1 group">
+                {selectedFile?.type.startsWith("image/") ? (
+                  <img
+                    src={selectedFilePreview}
+                    alt="Preview"
+                    className="h-32 rounded-lg object-cover border border-[#e1e3e4] shadow-sm bg-[#f8f9fa]"
+                  />
+                ) : selectedFile?.type.startsWith("video/") ? (
+                  <video
+                    src={selectedFilePreview}
+                    className="h-32 rounded-lg object-cover border border-[#e1e3e4] shadow-sm bg-[#f8f9fa]"
+                    controls
+                  />
+                ) : (
+                  <div className="h-32 w-32 rounded-lg bg-[#f8f9fa] border border-[#e1e3e4] flex flex-col items-center justify-center text-[#727780]">
+                    <span className="material-symbols-outlined text-4xl">
+                      draft
+                    </span>
+                    <span className="text-xs font-bold mt-2 max-w-full truncate px-2">
+                      {selectedFile?.name}
+                    </span>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setSelectedFilePreview(null);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="absolute -top-2 -right-2 bg-white text-red-500 rounded-full p-1 shadow-md hover:bg-red-50 transition-colors border border-[#e1e3e4] z-10 flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-sm block">
+                    close
+                  </span>
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-end gap-3 w-full">
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileUpload}
+                accept="image/*,video/*,audio/*,application/pdf"
+              />
               <button
-                onClick={() => setMessageText((prev) => prev + "😊")}
-                className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors"
-                title="Add Emoji"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSending}
+                className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors shrink-0 mb-1"
               >
-                <span className="material-symbols-outlined">mood</span>
+                <span className="material-symbols-outlined">add</span>
               </button>
-              <button
-                onClick={handleSend}
-                disabled={!messageText.trim() || isSending}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-all active:scale-95 ${
-                  messageText.trim() && !isSending
-                    ? "bg-gradient-to-br from-[#003752] to-[#1d4e6c] text-white shadow-[#003752]/20"
-                    : "bg-[#edeeef] text-[#727780] cursor-not-allowed"
-                }`}
-              >
-                <span className="material-symbols-outlined">
-                  {isSending ? "sync" : "send"}
-                </span>
-              </button>
+              <textarea
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isSending}
+                className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-body py-2.5 resize-none max-h-32 min-h-[44px]"
+                placeholder="Type your message here..."
+                rows={1}
+              />
+              <div className="flex items-center gap-2 pb-1 pr-1 shrink-0 mb-1">
+                <button
+                  onClick={() => setMessageText((prev) => prev + "😊")}
+                  className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors"
+                  title="Add Emoji"
+                >
+                  <span className="material-symbols-outlined">mood</span>
+                </button>
+                <button
+                  onClick={handleSend}
+                  disabled={(!messageText.trim() && !selectedFile) || isSending}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-md transition-all active:scale-95 ${
+                    (messageText.trim() || selectedFile) && !isSending
+                      ? "bg-gradient-to-br from-[#003752] to-[#1d4e6c] text-white shadow-[#003752]/20"
+                      : "bg-[#edeeef] text-[#727780] cursor-not-allowed"
+                  }`}
+                >
+                  <span className="material-symbols-outlined">
+                    {isSending ? "sync" : "send"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Media Overlay Modal (WhatsApp Gallery Style) */}
+      {galleryMediaIndex !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col animate-in fade-in duration-200"
+          onClick={() => setGalleryMediaIndex(null)}
+        >
+          {/* Top Bar */}
+          <div className="h-16 flex items-center justify-between px-6 bg-gradient-to-b from-black/80 to-transparent">
+            {/* Download/Open Button */}
+            <a
+              href={chatMedia[galleryMediaIndex]?.media_url || "#"}
+              target="_blank"
+              rel="noreferrer"
+              className="text-white/80 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+              onClick={(e) => e.stopPropagation()}
+              title="Open Original"
+            >
+              <span className="material-symbols-outlined text-xl">
+                open_in_new
+              </span>
+            </a>
+
+            <button
+              className="text-white/80 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10"
+              onClick={() => setGalleryMediaIndex(null)}
+            >
+              <span className="material-symbols-outlined text-2xl">close</span>
+            </button>
+          </div>
+
+          {/* Main View Area */}
+          <div
+            className="flex-1 relative flex items-center justify-center overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Prev Button */}
+            {galleryMediaIndex > 0 && (
+              <button
+                className="absolute left-4 md:left-12 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all z-10"
+                onClick={() => setGalleryMediaIndex((prev) => prev! - 1)}
+              >
+                <span className="material-symbols-outlined text-2xl">
+                  chevron_left
+                </span>
+              </button>
+            )}
+
+            {/* Current Media */}
+            <div className="w-full h-full max-w-5xl max-h-[75vh] flex items-center justify-center p-4">
+              {chatMedia[galleryMediaIndex]?.message_type === "video" ? (
+                <video
+                  src={chatMedia[galleryMediaIndex]?.media_url || ""}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-full object-contain rounded-sm"
+                />
+              ) : (
+                <img
+                  src={chatMedia[galleryMediaIndex]?.media_url || ""}
+                  alt="Gallery content"
+                  className="max-w-full max-h-full object-contain rounded-sm"
+                />
+              )}
+            </div>
+
+            {/* Next Button */}
+            {galleryMediaIndex < chatMedia.length - 1 && (
+              <button
+                className="absolute right-4 md:right-12 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-all z-10"
+                onClick={() => setGalleryMediaIndex((prev) => prev! + 1)}
+              >
+                <span className="material-symbols-outlined text-2xl">
+                  chevron_right
+                </span>
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Thumbnails Strip */}
+          <div
+            className="h-32 bg-black flex items-center overflow-x-auto px-4 py-4 gap-2 no-scrollbar scroll-smooth"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex mx-auto gap-2 min-w-min">
+              {chatMedia.map((media, i) => (
+                <button
+                  key={i}
+                  onClick={() => setGalleryMediaIndex(i)}
+                  className={`relative shrink-0 h-16 md:h-20 aspect-square overflow-hidden rounded-sm transition-all ${
+                    galleryMediaIndex === i
+                      ? "ring-2 ring-white scale-100 opacity-100"
+                      : "opacity-40 hover:opacity-100 scale-95"
+                  }`}
+                >
+                  {media.message_type === "video" ? (
+                    <>
+                      <video
+                        src={media.media_url || ""}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <span className="material-symbols-outlined text-white text-lg drop-shadow-md">
+                          play_circle
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={media.media_url || ""}
+                      alt="Thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

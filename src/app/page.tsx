@@ -183,7 +183,7 @@ export default function Home() {
 
                       <div
                         style={{ width: `${detailsWidth}px` }}
-                        className="shrink-0 flex h-full"
+                        className="shrink-0 flex flex-col h-full bg-[#f3f4f5] overflow-hidden"
                       >
                         <ContactDetails
                           contact={selectedContact}
