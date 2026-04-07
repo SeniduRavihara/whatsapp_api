@@ -73,12 +73,65 @@ const ContactDetails = ({ contact, onClose }: ContactDetailsProps) => {
         <div className="space-y-4">
           <h5 className="text-[10px] font-bold uppercase tracking-widest text-[#727780]">Project Tags</h5>
           <div className="flex flex-wrap gap-2">
-            <span className="px-3 py-1 rounded-full bg-[#cfe6f2] text-[#526772] text-[10px] font-bold">CLIENT</span>
-            <span className="px-3 py-1 rounded-full bg-[#005624]/10 text-[#005624] text-[10px] font-bold">WHATSAPP</span>
-            <button className="w-6 h-6 rounded-full border border-dashed border-[#727780] flex items-center justify-center text-[#727780] hover:border-[#003752] hover:text-[#003752]">
+            {(contact.tags || []).map((tag: string, index: number) => (
+              <span key={index} className="px-3 py-1 rounded-full bg-[#cfe6f2] text-[#526772] text-[10px] font-bold">{tag}</span>
+            ))}
+            <button 
+              onClick={async () => {
+                const tag = prompt("Enter new tag");
+                if (tag) {
+                  const newTags = [...(contact.tags || []), tag];
+                  await fetch('/api/whatsapp/contact', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: contact.phone, tags: newTags }),
+                  });
+                }
+              }}
+              className="w-6 h-6 rounded-full border border-dashed border-[#727780] flex items-center justify-center text-[#727780] hover:border-[#003752] hover:text-[#003752]"
+            >
                <span className="material-symbols-outlined text-sm">add</span>
             </button>
           </div>
+        </div>
+
+        {/* Internal Notes Placeholder */}
+        <div className="space-y-4 pt-4 border-t border-[#e1e3e4]">
+          <div className="flex items-center justify-between">
+            <h5 className="text-[10px] font-bold uppercase tracking-widest text-[#727780]">Internal Notes</h5>
+            <button 
+              onClick={async () => {
+                const note = prompt("Enter internal note");
+                if (note) {
+                  await fetch('/api/whatsapp/contact', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: contact.phone, internal_notes: note }),
+                  });
+                }
+              }}
+              className="text-[10px] font-bold text-[#003752] hover:underline"
+            >
+              Edit
+            </button>
+          </div>
+          {contact.internal_notes ? (
+             <p className="text-xs font-body text-[#191c1d] leading-relaxed">{contact.internal_notes}</p>
+          ) : (
+             <p className="text-xs font-body text-[#727780] italic">No internal notes yet.</p>
+          )}
+        </div>
+
+        {/* AI Summary Placeholder */}
+        <div className="space-y-4 pt-4 border-t border-[#e1e3e4]">
+           <div className="flex items-center justify-between">
+            <h5 className="text-[10px] font-bold uppercase tracking-widest text-[#727780]">AI Summary</h5>
+          </div>
+          {contact.ai_summary ? (
+             <p className="text-xs font-body text-[#191c1d] leading-relaxed">{contact.ai_summary}</p>
+          ) : (
+             <p className="text-xs font-body text-[#727780] italic">Click "Generate AI Summary" in chat.</p>
+          )}
         </div>
       </div>
     </aside>

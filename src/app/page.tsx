@@ -25,6 +25,16 @@ export default function Home() {
 
   const mainRef = useRef<HTMLDivElement>(null);
 
+  const fetchSelectedContact = useCallback(async () => {
+    if (!selectedContactPhone) return;
+    const { data } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('phone', selectedContactPhone)
+      .single();
+    setSelectedContact(data);
+  }, [selectedContactPhone]);
+
   useEffect(() => {
     if (selectedContactPhone) {
       fetchSelectedContact();
@@ -32,16 +42,7 @@ export default function Home() {
     } else {
       setSelectedContact(null);
     }
-  }, [selectedContactPhone]);
-
-  const fetchSelectedContact = async () => {
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('phone', selectedContactPhone)
-      .single();
-    setSelectedContact(data);
-  };
+  }, [selectedContactPhone, fetchSelectedContact]);
 
   // Dragging Logic
   const startResizingList = useCallback((e: React.MouseEvent) => {

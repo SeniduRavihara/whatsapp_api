@@ -5,6 +5,9 @@ export interface Contact {
   last_message: string;
   last_message_at: string;
   unread_count: number;
+  internal_notes?: string;
+  ai_summary?: string;
+  tags?: string[];
   avatar_url?: string;
   description?: string;
 }

@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS contacts (
     last_message TEXT,
     last_message_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     unread_count INTEGER DEFAULT 0,
+    internal_notes TEXT,
+    ai_summary TEXT,
+    tags JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

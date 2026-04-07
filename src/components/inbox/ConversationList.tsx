@@ -12,6 +12,7 @@ interface ConversationListProps {
 
 const ConversationList = ({ selectedPhone, onSelect, mode = 'open' }: ConversationListProps) => {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const isMini = mode === 'mini';
 
@@ -51,7 +52,29 @@ const ConversationList = ({ selectedPhone, onSelect, mode = 'open' }: Conversati
       {!isMini && (
         <div className="p-6 h-16 flex items-center justify-between shrink-0">
           <h2 className="font-headline font-bold text-xl tracking-tight text-[#191c1d]">Messages</h2>
-          <span className="material-symbols-outlined text-[#727780] cursor-pointer hover:text-[#003752]" data-icon="edit_square">edit_square</span>
+          <button 
+            className="material-symbols-outlined text-[#727780] cursor-pointer hover:text-[#003752]" 
+            title="New Conversation"
+            data-icon="edit_square"
+            onClick={async () => {
+              const phone = prompt("Enter international phone number (e.g. 1234567890):");
+              if (!phone) return;
+              
+              // Upsert contact
+              const { error } = await supabase.from('contacts').upsert({
+                phone,
+                name: 'New Contact'
+              }, { onConflict: 'phone' });
+              
+              if (!error) {
+                onSelect(phone);
+              } else {
+                alert("Failed to create conversation");
+              }
+            }}
+          >
+            edit_square
+          </button>
         </div>
       )}
 
@@ -61,6 +84,8 @@ const ConversationList = ({ selectedPhone, onSelect, mode = 'open' }: Conversati
           <div className="bg-white rounded-full px-4 py-2 flex items-center gap-3 shadow-sm border border-[#e1e3e4]">
             <span className="material-symbols-outlined text-[#727780] text-sm" data-icon="search">search</span>
             <input 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-transparent border-none focus:ring-0 text-sm w-full font-body placeholder-[#727780]" 
               placeholder="Search conversations..." 
               type="text"
@@ -73,10 +98,18 @@ const ConversationList = ({ selectedPhone, onSelect, mode = 'open' }: Conversati
       <div className={`flex-1 overflow-y-auto no-scrollbar mt-4 space-y-1 ${isMini ? 'px-2' : 'px-2'}`}>
         {loading ? (
           !isMini && <div className="p-4 text-center text-[#727780] text-xs font-medium">Loading resources...</div>
-        ) : contacts.length === 0 ? (
+        ) : contacts.filter(c => 
+            c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            c.phone.includes(searchQuery)
+          ).length === 0 ? (
           !isMini && <div className="p-4 text-center text-[#727780] text-xs font-medium">No active conversations</div>
         ) : (
-          contacts.map((contact) => (
+          contacts
+            .filter(c => 
+              c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+              c.phone.includes(searchQuery)
+            )
+            .map((contact) => (
             <div
               key={contact.id}
               onClick={() => onSelect(contact.phone)}
@@ -115,6 +148,11 @@ const ConversationList = ({ selectedPhone, onSelect, mode = 'open' }: Conversati
                   <p className={`text-xs truncate font-body leading-normal ${contact.unread_count > 0 ? 'text-[#191c1d] font-semibold' : 'text-[#42474f]'}`}>
                     {contact.last_message}
                   </p>
+                </div>
+              )}
+              {contact.unread_count > 0 && !isMini && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-[#3de273] text-white text-[10px] font-bold flex items-center justify-center rounded-full shadow-sm">
+                  {contact.unread_count}
                 </div>
               )}
             </div>

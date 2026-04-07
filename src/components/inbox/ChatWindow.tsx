@@ -26,6 +26,7 @@ const ChatWindow = ({
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   useEffect(() => {
     fetchContact();
@@ -76,6 +77,15 @@ const ChatWindow = ({
 
     if (!error) {
       setMessages(data || []);
+      
+      // Attempt to clear unread counts / send read receipt
+      if (data?.some(m => m.sender === 'them' && m.status !== 'read')) {
+        fetch('/api/whatsapp/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: contactPhone }),
+        }).catch(err => console.error('Failed to send read receipt', err));
+      }
     }
     setLoading(false);
   };
@@ -120,6 +130,106 @@ const ChatWindow = ({
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsSending(true);
+    try {
+      // 1. Upload to Supabase Storage
+      const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from('whatsapp_media')
+        .upload(fileName, file, {
+          cacheControl: file.type,
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Upload Error:', uploadError);
+        setIsSending(false);
+        return;
+      }
+
+      // 2. Get Public URL
+      const { data: publicUrlData } = supabase
+        .storage
+        .from('whatsapp_media')
+        .getPublicUrl(fileName);
+
+      const mediaUrl = publicUrlData.publicUrl;
+
+      // 3. Determine WhatsApp media type
+      let type = 'document';
+      if (file.type.startsWith('image/')) type = 'image';
+      else if (file.type.startsWith('video/')) type = 'video';
+      else if (file.type.startsWith('audio/')) type = 'audio';
+
+      // 4. Send message via API
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: contactPhone,
+          type,
+          mediaUrl,
+          mimeType: file.type,
+          caption: messageText.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        setMessageText('');
+      } else {
+        const error = await response.json();
+        console.error('Failed to send media:', error);
+      }
+    } catch (error) {
+      console.error('Error sending media:', error);
+    } finally {
+      setIsSending(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    try {
+      const res = await fetch('/api/whatsapp/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: contactPhone }),
+      });
+      if (!res.ok) throw new Error('Failed to generate summary');
+      const data = await res.json();
+      
+      fetchContact();
+      alert(`AI Summary Generated:\n${data.summary}`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate AI summary.');
+    }
+  };
+
+  const handleInternalNote = async () => {
+    const note = prompt("Enter an internal note:");
+    if (note) {
+      try {
+        await fetch('/api/whatsapp/contact', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: contactPhone, internal_notes: note }),
+        });
+        fetchContact();
+      } catch (e) {
+        console.error(e);
+        alert('Failed to save note');
+      }
+    }
+  };
+
   return (
     <section className="flex-1 bg-[#f8f9fa] flex flex-col relative">
       {/* Stitch Header */}
@@ -155,11 +265,11 @@ const ChatWindow = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-[#edeeef] hover:bg-[#e7e8e9] transition-colors text-xs font-semibold font-headline text-[#191c1d]">
+          <button onClick={handleGenerateSummary} className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-[#edeeef] hover:bg-[#e7e8e9] transition-colors text-xs font-semibold font-headline text-[#191c1d]">
             <span className="material-symbols-outlined text-sm">summarize</span>
             Generate AI Summary
           </button>
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-[#edeeef] hover:bg-[#e7e8e9] transition-colors text-xs font-semibold font-headline text-[#191c1d]">
+          <button onClick={handleInternalNote} className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-[#edeeef] hover:bg-[#e7e8e9] transition-colors text-xs font-semibold font-headline text-[#191c1d]">
             <span className="material-symbols-outlined text-sm">label</span>
             Internal Note
           </button>
@@ -228,7 +338,18 @@ const ChatWindow = ({
           </div>
 
           <div className="bg-white rounded-2xl p-2 flex items-end gap-3 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-[#e1e3e4] focus-within:border-[#003752]/30 transition-all">
-            <button className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors">
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileUpload}
+              accept="image/*,video/*,audio/*,application/pdf"
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isSending}
+              className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors"
+            >
               <span className="material-symbols-outlined">add</span>
             </button>
             <textarea 
@@ -241,7 +362,11 @@ const ChatWindow = ({
               rows={1}
             />
             <div className="flex items-center gap-2 pb-1 pr-1">
-              <button className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors">
+              <button 
+                onClick={() => setMessageText(prev => prev + "😊")}
+                className="w-10 h-10 flex items-center justify-center text-[#727780] hover:text-[#003752] transition-colors"
+                title="Add Emoji"
+              >
                 <span className="material-symbols-outlined">mood</span>
               </button>
               <button 
