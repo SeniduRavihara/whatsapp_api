@@ -74,21 +74,30 @@ export async function POST(request: Request) {
             }
           }
 
-          // 1. Ensure contact exists in Supabase
-          const { error: contactError } = await supabaseAdmin
+          // 1. Ensure contact exists and increment unread count
+          const { data: existingContact } = await supabaseAdmin
             .from("contacts")
+            .select("unread_count, name")
+            .eq("phone", from)
+            .single();
+
+          const newUnreadCount = (existingContact?.unread_count || 0) + 1;
+          const finalName = senderName !== 'Unknown' ? senderName : (existingContact?.name || from);
+
+          const { error: contactError } = await supabaseAdmin
+            .from('contacts')
             .upsert(
-              {
-                phone: from,
-                name: senderName,
+              { 
+                phone: from, 
+                name: finalName,
                 last_message: text,
                 last_message_at: new Date().toISOString(),
+                unread_count: newUnreadCount
               },
-              { onConflict: "phone" }
+              { onConflict: 'phone' }
             );
 
-          if (contactError)
-            console.error("Contact Upsert Error:", contactError);
+          if (contactError) console.error('Contact Upsert Error:', contactError);
 
           // 2. Insert message into Supabase
           const { error: msgError } = await supabaseAdmin
