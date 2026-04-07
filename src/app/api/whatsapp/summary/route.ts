@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 );
 
 export async function POST(request: Request) {
@@ -11,25 +11,30 @@ export async function POST(request: Request) {
     const { phone } = await request.json();
 
     if (!phone) {
-      return new NextResponse('Phone is required', { status: 400 });
+      return new NextResponse("Phone is required", { status: 400 });
     }
 
     // Fetch chat history
     const { data: messages } = await supabaseAdmin
-      .from('messages')
-      .select('text, sender, created_at')
-      .eq('contact_phone', phone)
-      .order('created_at', { ascending: true })
+      .from("messages")
+      .select("text, sender, created_at")
+      .eq("contact_phone", phone)
+      .order("created_at", { ascending: true })
       .limit(50); // Get last 50 messages for summary
 
     if (!messages || messages.length === 0) {
-      return new NextResponse('No messages to summarize', { status: 400 });
+      return new NextResponse("No messages to summarize", { status: 400 });
     }
 
     // Format transcript
-    const transcript = messages.map(m => 
-      `[${m.created_at}] ${m.sender === 'me' ? 'Agent' : 'Client'}: ${m.text}`
-    ).join('\n');
+    const transcript = messages
+      .map(
+        (m) =>
+          `[${m.created_at}] ${m.sender === "me" ? "Agent" : "Client"}: ${
+            m.text
+          }`
+      )
+      .join("\n");
 
     // MOCK AI SUMMARY (Since no AI key is provided yet, we generate a mock)
     // In a real scenario, you would send `transcript` to OpenAI/Gemini
@@ -37,13 +42,13 @@ export async function POST(request: Request) {
 
     // Save summary to contact
     await supabaseAdmin
-      .from('contacts')
+      .from("contacts")
       .update({ ai_summary: aiSummary })
-      .eq('phone', phone);
+      .eq("phone", phone);
 
     return NextResponse.json({ summary: aiSummary });
   } catch (error) {
-    console.error('Summary API Error:', error);
-    return new NextResponse('Error', { status: 500 });
+    console.error("Summary API Error:", error);
+    return new NextResponse("Error", { status: 500 });
   }
 }

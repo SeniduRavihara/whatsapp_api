@@ -17,11 +17,18 @@ export interface Message {
   wa_id: string;
   contact_phone: string;
   text?: string;
-  message_type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'location';
+  message_type:
+    | "text"
+    | "image"
+    | "video"
+    | "audio"
+    | "document"
+    | "sticker"
+    | "location";
   media_url?: string;
   mime_type?: string;
   caption?: string;
-  sender: 'me' | 'them';
-  status: 'sent' | 'delivered' | 'read';
+  sender: "me" | "them";
+  status: "sent" | "delivered" | "read";
   created_at: string;
 }
