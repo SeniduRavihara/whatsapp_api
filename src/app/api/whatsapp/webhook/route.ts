@@ -58,9 +58,10 @@ export async function POST(request: Request) {
               const phone_number_id = value.metadata?.phone_number_id;
               caption = mediaData.caption || null;
               mimeType = mediaData.mime_type || null;
+              const direct_url = mediaData.url;
 
               // Fetch authenticated URL from Meta with scoping
-              mediaUrl = await getMediaUrl(media_id, phone_number_id);
+              mediaUrl = await getMediaUrl(media_id, phone_number_id, direct_url);
 
               // Fallback text for the preview
               if (!text) {
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function getMediaUrl(media_id: string, phone_number_id?: string) {
+async function getMediaUrl(media_id: string, phone_number_id?: string, direct_url?: string) {
   try {
     const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
     if (!WHATSAPP_TOKEN) {
@@ -137,34 +138,43 @@ async function getMediaUrl(media_id: string, phone_number_id?: string) {
       return null;
     }
 
-    // 1. Get Meta Media Metadata (v21.0 + scoping)
-    let metaUrl = `https://graph.facebook.com/v21.0/${media_id}`;
-    if (phone_number_id) {
-      metaUrl += `?phone_number_id=${phone_number_id}`;
-    }
+    let metaUrl = direct_url;
+    let contentType = null;
 
-    console.log(
-      `📡 Fetching Meta URL for ${media_id} (Scoping: ${phone_number_id})...`
-    );
+    if (!metaUrl) {
+      // 1. Get Meta Media Metadata (v21.0 + scoping)
+      let fetchUrl = `https://graph.facebook.com/v21.0/${media_id}`;
+      if (phone_number_id) {
+        fetchUrl += `?phone_number_id=${phone_number_id}`;
+      }
 
-    const metaRes = await fetch(metaUrl, {
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "User-Agent": "Stitch-CRM/1.0",
-      },
-    });
+      console.log(
+        `📡 Fetching Meta URL for ${media_id} (Scoping: ${phone_number_id})...`
+      );
 
-    const metaData = await metaRes.json();
-    console.log("📦 META RAW DATA:", JSON.stringify(metaData, null, 2));
+      const metaRes = await fetch(fetchUrl, {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "User-Agent": "Stitch-CRM/1.0",
+        },
+      });
 
-    if (!metaData.url) {
-      console.error("❌ Meta failed to provide a URL. Response:", metaData);
-      return null;
+      const metaData = await metaRes.json();
+      console.log("📦 META RAW DATA:", JSON.stringify(metaData, null, 2));
+
+      if (!metaData.url) {
+        console.error("❌ Meta failed to provide a URL. Response:", metaData);
+        return null;
+      }
+      metaUrl = metaData.url;
+      contentType = metaData.mime_type;
+    } else {
+      console.log(`⏭️ Skipping Meta URL fetch, using direct_url from webhook`);
     }
 
     // 2. Download Binary Data
     console.log("⬇️ Downloading binary from Meta...");
-    const downloadRes = await fetch(metaData.url, {
+    const downloadRes = await fetch(metaUrl as string, {
       headers: {
         Authorization: `Bearer ${WHATSAPP_TOKEN}`,
         "User-Agent": "Stitch-CRM/1.0",
@@ -172,7 +182,8 @@ async function getMediaUrl(media_id: string, phone_number_id?: string) {
     });
 
     if (!downloadRes.ok) {
-      console.error(`❌ Download failed with status: ${downloadRes.status}`);
+      const errorText = await downloadRes.text();
+      console.error(`❌ Download failed with status: ${downloadRes.status} ${errorText}`);
       return null;
     }
 
@@ -181,32 +192,34 @@ async function getMediaUrl(media_id: string, phone_number_id?: string) {
     console.log(`✅ Downloaded ${buffer.byteLength} bytes`);
 
     // 3. Upload to Supabase Storage
-    const fileName = `${Date.now()}-${media_id}.${
-      metaData.mime_type?.split("/")[1] || "bin"
-    }`;
+    contentType = contentType || downloadRes.headers.get("content-type") || "application/octet-stream";
+    const extension = contentType.split("/")[1] || "bin";
+    const fileName = `${Date.now()}-${media_id}.${extension}`;
     console.log(`📤 Uploading to Supabase as ${fileName}...`);
-
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
+    
+    const { data: uploadData, error: uploadError } = await supabaseAdmin
+      .storage
       .from("whatsapp_media")
       .upload(fileName, buffer, {
-        contentType: metaData.mime_type,
+        contentType: contentType,
         upsert: true,
       });
 
     if (uploadError) {
       console.error("❌ Supabase Upload Failed:", uploadError);
-      return metaData.url; // Fallback to Meta URL if available
+      return metaUrl; // Fallback to Meta URL if available
     }
 
     // 4. Get Public URL
-    const { data: publicUrlData } = supabaseAdmin.storage
+    const { data: publicUrlData } = supabaseAdmin
+      .storage
       .from("whatsapp_media")
       .getPublicUrl(fileName);
 
-    console.log("🚀 PERMANENT URL GENERATED:", publicUrlData.publicUrl);
+    console.log("✅ Upload successful:", publicUrlData.publicUrl);
     return publicUrlData.publicUrl;
-  } catch (error: any) {
-    console.error("❌ CRITICAL MEDIA ERROR:", error.message);
+  } catch (error) {
+    console.error("❌ getMediaUrl Error:", error);
     return null;
   }
 }
