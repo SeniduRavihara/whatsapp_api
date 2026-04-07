@@ -24,7 +24,8 @@ export interface Message {
     | "audio"
     | "document"
     | "sticker"
-    | "location";
+    | "location"
+    | "contacts";
   media_url?: string;
   mime_type?: string;
   caption?: string;

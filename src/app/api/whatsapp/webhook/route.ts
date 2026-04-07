@@ -50,27 +50,35 @@ export async function POST(request: Request) {
           let mimeType = null;
           let caption = null;
 
-          // Handle Multimedia (Image, Document, Video, etc.)
+          // Handle Multimedia and Special Types
           if (messageType !== "text") {
             const mediaData = message[messageType];
-            if (mediaData) {
-              const media_id = mediaData.id;
-              const phone_number_id = value.metadata?.phone_number_id;
-              caption = mediaData.caption || null;
-              mimeType = mediaData.mime_type || null;
-              const direct_url = mediaData.url;
+            
+            if (messageType === "audio" || messageType === "document" || messageType === "image" || messageType === "video") {
+              if (mediaData) {
+                const media_id = mediaData.id;
+                const phone_number_id = value.metadata?.phone_number_id;
+                caption = mediaData.caption || null;
+                mimeType = mediaData.mime_type || null;
+                const direct_url = mediaData.url;
+                
+                // For documents, try to get the filename
+                if (messageType === "document" && mediaData.filename) {
+                  caption = mediaData.filename; // Use filename as caption if not provided
+                }
 
-              // Fetch authenticated URL from Meta with scoping
-              mediaUrl = await getMediaUrl(
-                media_id,
-                phone_number_id,
-                direct_url
-              );
-
-              // Fallback text for the preview
-              if (!text) {
+                mediaUrl = await getMediaUrl(media_id, phone_number_id, direct_url);
                 text = caption || `[${messageType}]`;
               }
+            } else if (messageType === "location") {
+              const loc = message.location;
+              // Format: lat,lng,name,address
+              text = `${loc.latitude},${loc.longitude},${loc.name || ""},${loc.address || ""}`;
+            } else if (messageType === "contacts") {
+              const contact = message.contacts?.[0];
+              const name = contact?.name?.formatted_name || contact?.name?.first_name || "Contact";
+              const phone = contact?.phones?.[0]?.phone || "";
+              text = `${name}|${phone}`; // Format for UI parsing
             }
           }
 

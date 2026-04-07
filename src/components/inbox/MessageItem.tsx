@@ -15,7 +15,8 @@ interface MessageProps {
     | "audio"
     | "document"
     | "sticker"
-    | "location";
+    | "location"
+    | "contacts";
   mediaUrl?: string;
   mimeType?: string;
   caption?: string;
@@ -90,6 +91,83 @@ const MessageItem: React.FC<MessageProps> = ({
               onClick={() => onMediaClick && mediaUrl && onMediaClick(mediaUrl)}
               className="max-w-full max-h-[300px] cursor-pointer hover:opacity-95 transition-opacity"
             />
+          </div>
+        );
+
+      case "audio":
+        return (
+          <div className="flex flex-col gap-2 min-w-[220px]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-[#cfe6f2] flex items-center justify-center text-[#003752]">
+                <span className="material-symbols-outlined text-lg">mic</span>
+              </div>
+              <audio
+                src={mediaUrl}
+                controls
+                className="flex-1 h-8 accent-[#003752]"
+              />
+            </div>
+            {caption && (
+              <p className="text-[10px] text-[#727780] font-medium uppercase tracking-wider px-1">
+                {caption}
+              </p>
+            )}
+          </div>
+        );
+      
+      case "location": {
+        const [lat, lng, locName, locAddr] = (text || "").split(",");
+        return (
+          <a
+            href={`https://www.google.com/maps?q=${lat},${lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col gap-0 min-w-[240px] max-w-sm rounded-xl overflow-hidden border border-[#e1e3e4] bg-white group transition-all hover:border-[#003752] no-underline"
+          >
+            <div className="h-24 bg-[#cfe6f2] flex items-center justify-center relative overflow-hidden group-hover:bg-[#daeffa] transition-colors">
+              <span className="material-symbols-outlined text-4xl text-[#003752] z-10 transition-transform group-hover:scale-110">
+                location_on
+              </span>
+              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_2px_2px,_#003752_1px,_transparent_0)] bg-[length:12px_12px]"></div>
+            </div>
+            <div className="p-3 border-t border-[#e1e3e4]">
+              <h5 className="text-sm font-headline font-bold text-[#191c1d] truncate">
+                {locName || "Shared Location"}
+              </h5>
+              <p className="text-[10px] text-[#727780] font-medium line-clamp-1 mt-0.5">
+                {locAddr || `${lat}, ${lng}`}
+              </p>
+            </div>
+          </a>
+        );
+      }
+
+      case "contacts": {
+        const [contactName, contactPhone] = (text || "").split("|");
+        return (
+          <div className="flex items-center gap-3 bg-white border border-[#e1e3e4] rounded-xl p-3 min-w-[200px] shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-[#cfe6f2] flex items-center justify-center text-[#003752] font-headline font-bold text-sm">
+              {contactName?.charAt(0) || "?"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-headline font-bold text-[#191c1d] truncate">
+                {contactName || "Unknown Contact"}
+              </p>
+              <p className="text-[10px] font-medium text-[#727780] tracking-wider">
+                {contactPhone || "No Phone Number"}
+              </p>
+            </div>
+            <button className="material-symbols-outlined text-[#727780] text-sm hover:text-[#003752] transition-colors">
+              person_add
+            </button>
+          </div>
+        );
+      }
+
+      case "sticker":
+        return (
+          <div className="w-32 h-32">
+            <img src={mediaUrl} alt="Sticker" className="w-full h-full object-contain" />
           </div>
         );
 
