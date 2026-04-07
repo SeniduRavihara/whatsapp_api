@@ -47,6 +47,29 @@ export default function Home() {
     }
   }, [selectedContactPhone, fetchSelectedContact]);
 
+  useEffect(() => {
+    if (!selectedContactPhone) return;
+    const channel = supabase
+      .channel(`public:contacts:${selectedContactPhone}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "contacts",
+          filter: `phone=eq.${selectedContactPhone}`,
+        },
+        () => {
+          fetchSelectedContact();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedContactPhone, fetchSelectedContact]);
+
   // Dragging Logic
   const startResizingList = useCallback(
     (e: React.MouseEvent) => {

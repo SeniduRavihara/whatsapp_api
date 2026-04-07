@@ -61,7 +61,11 @@ export async function POST(request: Request) {
               const direct_url = mediaData.url;
 
               // Fetch authenticated URL from Meta with scoping
-              mediaUrl = await getMediaUrl(media_id, phone_number_id, direct_url);
+              mediaUrl = await getMediaUrl(
+                media_id,
+                phone_number_id,
+                direct_url
+              );
 
               // Fallback text for the preview
               if (!text) {
@@ -130,7 +134,11 @@ export async function POST(request: Request) {
   }
 }
 
-async function getMediaUrl(media_id: string, phone_number_id?: string, direct_url?: string) {
+async function getMediaUrl(
+  media_id: string,
+  phone_number_id?: string,
+  direct_url?: string
+) {
   try {
     const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
     if (!WHATSAPP_TOKEN) {
@@ -183,7 +191,9 @@ async function getMediaUrl(media_id: string, phone_number_id?: string, direct_ur
 
     if (!downloadRes.ok) {
       const errorText = await downloadRes.text();
-      console.error(`❌ Download failed with status: ${downloadRes.status} ${errorText}`);
+      console.error(
+        `❌ Download failed with status: ${downloadRes.status} ${errorText}`
+      );
       return null;
     }
 
@@ -192,13 +202,15 @@ async function getMediaUrl(media_id: string, phone_number_id?: string, direct_ur
     console.log(`✅ Downloaded ${buffer.byteLength} bytes`);
 
     // 3. Upload to Supabase Storage
-    contentType = contentType || downloadRes.headers.get("content-type") || "application/octet-stream";
+    contentType =
+      contentType ||
+      downloadRes.headers.get("content-type") ||
+      "application/octet-stream";
     const extension = contentType.split("/")[1] || "bin";
     const fileName = `${Date.now()}-${media_id}.${extension}`;
     console.log(`📤 Uploading to Supabase as ${fileName}...`);
-    
-    const { data: uploadData, error: uploadError } = await supabaseAdmin
-      .storage
+
+    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
       .from("whatsapp_media")
       .upload(fileName, buffer, {
         contentType: contentType,
@@ -211,8 +223,7 @@ async function getMediaUrl(media_id: string, phone_number_id?: string, direct_ur
     }
 
     // 4. Get Public URL
-    const { data: publicUrlData } = supabaseAdmin
-      .storage
+    const { data: publicUrlData } = supabaseAdmin.storage
       .from("whatsapp_media")
       .getPublicUrl(fileName);
 
