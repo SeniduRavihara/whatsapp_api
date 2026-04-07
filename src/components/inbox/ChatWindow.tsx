@@ -148,7 +148,7 @@ const ChatWindow = ({
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("whatsapp_media")
         .upload(fileName, file, {
-          cacheControl: file.type,
+          contentType: file.type,
           upsert: true,
         });
 
