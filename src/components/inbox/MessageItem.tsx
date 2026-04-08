@@ -188,14 +188,16 @@ const MessageItem: React.FC<MessageProps> = ({
         } max-w-[75%]`}
       >
         <div
-          className={`px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed transition-all duration-200 ${
+          className={`transition-all duration-200 ${
             type === "text"
-              ? isMe
-                ? "bg-[#003752] text-white rounded-tr-none shadow-md font-medium"
-                : "bg-white text-[#191c1d] rounded-tl-none border border-[#e1e3e4]/50"
-              : isMe
-              ? "items-end"
-              : "items-start"
+              ? `px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                  isMe
+                    ? "bg-[#003752] text-white rounded-tr-none shadow-md font-medium"
+                    : "bg-white text-[#191c1d] rounded-tl-none border border-[#e1e3e4]/50"
+                }`
+              : type === "sticker"
+              ? "" // No bubble for stickers
+              : "px-1 py-1" // Minimal padding for other media
           }`}
         >
           {renderContent()}

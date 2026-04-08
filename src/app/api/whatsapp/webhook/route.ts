@@ -54,7 +54,7 @@ export async function POST(request: Request) {
           if (messageType !== "text") {
             const mediaData = message[messageType];
             
-            if (messageType === "audio" || messageType === "document" || messageType === "image" || messageType === "video") {
+            if (messageType === "audio" || messageType === "document" || messageType === "image" || messageType === "video" || messageType === "sticker") {
               if (mediaData) {
                 const media_id = mediaData.id;
                 const phone_number_id = value.metadata?.phone_number_id;
